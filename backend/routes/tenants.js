@@ -1,0 +1,158 @@
+const express = require('express');
+const router = express.Router();
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
+// ✅ Получить всех арендаторов с количеством сотрудников (только активных)
+router.get('/', async (req, res) => {
+  try {
+    const tenants = await prisma.tenant.findMany({
+      where: { isDeleted: false },
+      select: {
+        id: true,
+        name: true,
+        apiKey: true,
+        maxStaff: true,
+        _count: {
+          select: {
+            users: {
+              where: { isDeleted: false },
+            },
+          },
+        },
+      },
+    });
+    res.json(tenants);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ Получить одного арендатора по ID (с количеством сотрудников)
+router.get('/:id', async (req, res) => {
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        id: true,
+        name: true,
+        apiKey: true,
+        maxStaff: true,
+        isDeleted: true,
+        _count: {
+          select: {
+            users: {
+              where: { isDeleted: false },
+            },
+          },
+        },
+      },
+    });
+    if (!tenant || tenant.isDeleted) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+    // Удаляем isDeleted из ответа
+    const { isDeleted, ...tenantData } = tenant;
+    res.json(tenantData);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ Обновить данные арендатора (имя и лимит сотрудников)
+router.put('/:id', async (req, res) => {
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+    const { name, maxStaff } = req.body;
+
+    // Проверяем, что арендатор существует и не удален
+    const existingTenant = await prisma.tenant.findUnique({
+      where: { id: tenantId, isDeleted: false }
+    });
+
+    if (!existingTenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    const data = {};
+    
+    // Обновляем имя, если оно предоставлено и не пустое
+    if (name !== undefined && name !== null) {
+      if (name.trim() === '') {
+        return res.status(400).json({ error: 'Name cannot be empty' });
+      }
+      data.name = name.trim();
+    }
+    
+    // Обновляем maxStaff, если оно предоставлено
+    if (maxStaff !== undefined && maxStaff !== null) {
+      if (maxStaff === '' || maxStaff === 0) {
+        data.maxStaff = null; // Убираем лимит
+      } else {
+        const maxStaffNum = parseInt(maxStaff);
+        if (isNaN(maxStaffNum) || maxStaffNum < 0) {
+          return res.status(400).json({ error: 'maxStaff must be a positive number' });
+        }
+        data.maxStaff = maxStaffNum;
+      }
+    }
+
+    // Проверяем, что есть что обновлять
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: 'Nothing to update' });
+    }
+
+    const updatedTenant = await prisma.tenant.update({
+      where: { id: tenantId },
+      data,
+      select: {
+        id: true,
+        name: true,
+        apiKey: true,
+        maxStaff: true,
+        _count: {
+          select: {
+            users: {
+              where: { isDeleted: false },
+            },
+          },
+        },
+      },
+    });
+
+    res.json(updatedTenant);
+  } catch (err) {
+    console.error('Error updating tenant:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Удалить арендатора по ID
+router.delete('/:id', async (req, res) => {
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    if (tenant.name === 'admin') {
+      return res.status(403).json({ error: 'Admin account cannot be deleted.' });
+    }
+
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { isDeleted: true },
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+module.exports = router;

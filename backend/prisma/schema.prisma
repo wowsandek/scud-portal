@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  apiKey       String   @unique
+  passwordHash String?
+  users        User[]
+  requests     Request[]
+  turnovers    Turnover[]
+  status String @default("pending")
+  maxStaff Int?
+  isDeleted    Boolean  @default(false)
+}
+
+
+model User {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  fullName     String
+  cardNumber   String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  isDeleted  Boolean @default(false)
+}
+
+model Request {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  status       String   @default("pending")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  additions    Json
+  removals     Json
+  comment      String?
+}
+
+model Turnover {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  month           Int      // 1-12
+  year            Int      // например, 2025
+  amountNoVat     Float
+  amountWithVat   Float
+  receiptsCount   Int
+  fileName        String
+  filePath        String
+  fileSize        Int
+  fileType        String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
