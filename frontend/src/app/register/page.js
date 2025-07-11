@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
+import { API_BASE_URL } from '../../config/api';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function RegisterPage() {
         return;
       }
 
-      await axios.post('http://localhost:3001/api/auth/register', {
+      await axios.post(`${API_BASE_URL}/api/auth/register`, {
         name,
         password
       });

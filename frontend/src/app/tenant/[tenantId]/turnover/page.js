@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import axios from "axios";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { API_BASE_URL } from "../../../../config/api";
 
 export default function TurnoverPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function TurnoverPage() {
   const fetchTurnovers = async () => {
     setLoadingHistory(true);
     try {
-      const res = await axios.get(`http://localhost:3001/api/turnover/tenant/${tenantId}`);
+      const res = await axios.get(`${API_BASE_URL}/api/turnover/tenant/${tenantId}`);
       setTurnovers(res.data);
     } catch (err) {
       console.error(err);
@@ -52,7 +53,7 @@ export default function TurnoverPage() {
   const fetchChartData = async (year) => {
     setLoadingChart(true);
     try {
-      const res = await axios.get(`http://localhost:3001/api/turnover/tenant/${tenantId}/chart/${year}`);
+      const res = await axios.get(`${API_BASE_URL}/api/turnover/tenant/${tenantId}/chart/${year}`);
       setChartData(res.data);
     } catch (err) {
       console.error(err);
@@ -98,7 +99,7 @@ export default function TurnoverPage() {
       formData.append("receiptsCount", receiptsCount);
       formData.append("file", file);
       formData.append("tenantId", tenantId);
-      await axios.post("http://localhost:3001/api/turnover", formData, {
+      await axios.post(`${API_BASE_URL}/api/turnover`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setSuccess("Данные успешно отправлены!");

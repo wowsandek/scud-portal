@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../../../config/api';
 
 export default function TenantsListPage() {
   const [tenants, setTenants] = useState([]);
@@ -40,7 +41,7 @@ export default function TenantsListPage() {
 
   const fetchTenants = async () => {
     try {
-      const res = await axios.get('http://localhost:3001/api/tenants');
+      const res = await axios.get(`${API_BASE_URL}/api/tenants`);
       setTenants(res.data);
     } catch (err) {
       console.error(err);
@@ -92,7 +93,7 @@ export default function TenantsListPage() {
 
   const saveTenant = async (tenant) => {
     try {
-      await axios.put(`http://localhost:3001/api/tenants/${tenant.id}`, {
+      await axios.put(`${API_BASE_URL}/api/tenants/${tenant.id}`, {
         name: newName,
         maxStaff: newMaxStaff === '' ? null : parseInt(newMaxStaff),
       });
@@ -109,7 +110,7 @@ export default function TenantsListPage() {
   const deleteTenant = async (id) => {
     if (!window.confirm('Удалить этого арендатора? Это действие необратимо.')) return;
     try {
-      await axios.delete(`http://localhost:3001/api/tenants/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/tenants/${id}`);
       fetchTenants();
     } catch (err) {
       console.error(err);

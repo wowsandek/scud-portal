@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../../../../config/api';
 
 export default function TenantDetailPage() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function TenantDetailPage() {
 
   const fetchTenant = async () => {
     try {
-      const res = await axios.get(`http://localhost:3001/api/tenants/${tenantId}`);
+      const res = await axios.get(`${API_BASE_URL}/api/tenants/${tenantId}`);
       setTenant(res.data);
     } catch (err) {
       console.error(err);
@@ -52,7 +53,7 @@ export default function TenantDetailPage() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`http://localhost:3001/api/users/${tenantId}`);
+      const res = await axios.get(`${API_BASE_URL}/api/users/${tenantId}`);
       setUsers(res.data);
     } catch (err) {
       console.error(err);
@@ -61,7 +62,7 @@ export default function TenantDetailPage() {
 
   const fetchRequests = async () => {
     try {
-      const res = await axios.get(`http://localhost:3001/api/requests/tenant/${tenantId}`);
+      const res = await axios.get(`${API_BASE_URL}/api/requests/tenant/${tenantId}`);
       setRequests(res.data);
     } catch (err) {
       console.error(err);
@@ -74,7 +75,7 @@ export default function TenantDetailPage() {
       return;
     }
     try {
-      await axios.post(`http://localhost:3001/api/users`, {
+      await axios.post(`${API_BASE_URL}/api/users`, {
         tenantId: parseInt(tenantId),
         fullName: newFullName,
         cardNumber: newCardNumber
@@ -89,7 +90,7 @@ export default function TenantDetailPage() {
 
   const deleteUser = async (id) => {
     try {
-      await axios.delete(`http://localhost:3001/api/users/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/users/${id}`);
       fetchUsers();
     } catch (err) {
       console.error(err);

@@ -5,6 +5,7 @@ import axios from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../../../config/api';
 
 export default function PendingTenantsPage() {
   const [tenants, setTenants] = useState([]);
@@ -34,7 +35,7 @@ export default function PendingTenantsPage() {
 
   const fetchPending = async () => {
     try {
-      const res = await axios.get('http://localhost:3001/api/auth/pending-tenants');
+      const res = await axios.get(`${API_BASE_URL}/api/auth/pending-tenants`);
       setTenants(res.data);
     } catch (err) {
       console.error(err);
@@ -45,7 +46,7 @@ export default function PendingTenantsPage() {
 
   const approve = async (id) => {
     try {
-      await axios.post(`http://localhost:3001/api/auth/approve/${id}`);
+      await axios.post(`${API_BASE_URL}/api/auth/approve/${id}`);
       fetchPending();
     } catch (err) {
       console.error(err);
@@ -55,7 +56,7 @@ export default function PendingTenantsPage() {
   const reject = async (id) => {
     if (!window.confirm('Удалить эту регистрацию?')) return;
     try {
-      await axios.delete(`http://localhost:3001/api/auth/reject/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/auth/reject/${id}`);
       fetchPending();
     } catch (err) {
       console.error(err);

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import Link from 'next/link';
+import { API_BASE_URL } from '../../config/api';
 
 export default function AdminPage() {
   const [requests, setRequests] = useState([]);
@@ -29,7 +30,7 @@ export default function AdminPage() {
         ...(search && { tenantSearch: search })
       });
       
-      const res = await axios.get(`http://localhost:3001/api/requests?${params}`);
+      const res = await axios.get(`${API_BASE_URL}/api/requests?${params}`);
       setRequests(res.data.data);
       setPage(res.data.page);
       setTotalPages(res.data.totalPages);
@@ -94,7 +95,7 @@ export default function AdminPage() {
 
   const approveRequest = async (id) => {
     try {
-      await axios.post(`http://localhost:3001/api/requests/${id}/approve`);
+      await axios.post(`${API_BASE_URL}/api/requests/${id}/approve`);
       fetchRequests(page, statusFilter, searchQuery);
     } catch (err) {
       console.error(err);
@@ -103,7 +104,7 @@ export default function AdminPage() {
 
   const rejectRequest = async (id) => {
     try {
-      await axios.post(`http://localhost:3001/api/requests/${id}/reject`);
+      await axios.post(`${API_BASE_URL}/api/requests/${id}/reject`);
       fetchRequests(page, statusFilter, searchQuery);
     } catch (err) {
       console.error(err);

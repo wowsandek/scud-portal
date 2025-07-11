@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useParams, useRouter } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../../../config/api';
 
 export default function TenantPage() {
   const params = useParams();
@@ -22,7 +23,7 @@ export default function TenantPage() {
 
   const fetchTenant = async () => {
     try {
-      const res = await axios.get(`http://localhost:3001/api/tenants/${tenantId}`);
+      const res = await axios.get(`${API_BASE_URL}/api/tenants/${tenantId}`);
       setTenant(res.data);
     } catch (err) {
       console.error(err);
@@ -31,7 +32,7 @@ export default function TenantPage() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`http://localhost:3001/api/users/${tenantId}`);
+      const res = await axios.get(`${API_BASE_URL}/api/users/${tenantId}`);
       setUsers(res.data);
     } catch (err) {
       console.error(err);
@@ -40,7 +41,7 @@ export default function TenantPage() {
 
   const fetchRequests = async () => {
     try {
-      const res = await axios.get(`http://localhost:3001/api/requests/tenant/${tenantId}`);
+      const res = await axios.get(`${API_BASE_URL}/api/requests/tenant/${tenantId}`);
       setMyRequests(res.data);
     } catch (err) {
       console.error(err);
@@ -82,7 +83,7 @@ export default function TenantPage() {
       return;
     }
     try {
-      await axios.post(`http://localhost:3001/api/users`, {
+      await axios.post(`${API_BASE_URL}/api/users`, {
         tenantId: parseInt(tenantId),
         fullName,
         cardNumber
@@ -97,7 +98,7 @@ export default function TenantPage() {
 
   const deleteUser = async (id) => {
     try {
-      await axios.delete(`http://localhost:3001/api/users/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/users/${id}`);
       fetchUsers();
     } catch (err) {
       console.error(err);
@@ -130,7 +131,7 @@ export default function TenantPage() {
       return;
     }
     try {
-      await axios.post(`http://localhost:3001/api/requests`, {
+      await axios.post(`${API_BASE_URL}/api/requests`, {
         tenantId: parseInt(tenantId),
         additions,
         removals: removals.map(r => {
