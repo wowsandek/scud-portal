@@ -140,4 +140,119 @@ router.get('/tenant/:tenantId/chart/:year', async (req, res) => {
   }
 });
 
+// GET /api/turnover/all-tenants/:year/:month - Получить товарооборот всех арендаторов за период
+router.get('/all-tenants/:year/:month', async (req, res) => {
+  try {
+    const { year, month } = req.params;
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
+    
+    // Получаем всех арендаторов без фильтров
+    const tenants = await prisma.tenant.findMany({
+      select: {
+        id: true,
+        name: true
+      }
+    });
+    
+    // Получаем товарооборот за указанный период
+    const turnovers = await prisma.turnover.findMany({
+      where: {
+        year: yearNum,
+        month: monthNum
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+    
+    // Создаем результат с информацией о том, кто сдал, а кто нет
+    const result = tenants.map(tenant => {
+      const turnover = turnovers.find(t => t.tenantId === tenant.id);
+      return {
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        hasSubmitted: !!turnover,
+        turnover: turnover || null,
+        submittedAt: turnover?.createdAt || null
+      };
+    });
+    
+    res.json({
+      period: { year: yearNum, month: monthNum },
+      totalTenants: tenants.length,
+      submittedCount: turnovers.length,
+      pendingCount: tenants.length - turnovers.length,
+      data: result
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// GET /api/turnover/statistics/:year - Получить статистику по годам
+router.get('/statistics/:year', async (req, res) => {
+  try {
+    const { year } = req.params;
+    const yearNum = parseInt(year);
+    
+    // Получаем всех арендаторов без фильтров
+    const tenants = await prisma.tenant.findMany({
+      select: {
+        id: true,
+        name: true
+      }
+    });
+    
+    // Получаем товарооборот за весь год
+    const turnovers = await prisma.turnover.findMany({
+      where: {
+        year: yearNum
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+    
+    // Создаем статистику по месяцам
+    const monthlyStats = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      const monthTurnovers = turnovers.filter(t => t.month === month);
+      
+      return {
+        month,
+        monthName: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+                   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'][index],
+        totalTenants: tenants.length,
+        submittedCount: monthTurnovers.length,
+        pendingCount: tenants.length - monthTurnovers.length,
+        totalAmount: monthTurnovers.reduce((sum, t) => sum + t.amountWithVat, 0),
+        totalReceipts: monthTurnovers.reduce((sum, t) => sum + t.receiptsCount, 0)
+      };
+    });
+    
+    res.json({
+      year: yearNum,
+      totalTenants: tenants.length,
+      totalTurnover: turnovers.reduce((sum, t) => sum + t.amountWithVat, 0),
+      totalReceipts: turnovers.reduce((sum, t) => sum + t.receiptsCount, 0),
+      monthlyStats
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
 module.exports = router; 

@@ -19,6 +19,7 @@ services:
       DATABASE_URL: "postgresql://postgres:4815@db:5432/scudsystem"
       JWT_SECRET: "secret_key"
       FIRESEC_API_KEY: "YOUR_FIRESEC_KEY"
+      FRONTEND_URL: "http://82.202.140.145:3000"
     ports:
       - "3001:3001"
     volumes:
@@ -28,6 +29,8 @@ services:
     build: ./frontend
     depends_on:
       - backend
+    environment:
+      NEXT_PUBLIC_API_URL: "http://82.202.140.145:3001"
     ports:
       - "3000:3000"
 
