@@ -60,6 +60,9 @@ model Turnover {
   filePath        String
   fileSize        Int
   fileType        String
+  approvalStatus  String   @default("pending") // pending, approved, rejected
+  isLatest        Boolean  @default(true) // является ли последним отчетом за период
+  approvedTurnoverId Int?  // ID утвержденного отчета за этот период (если есть)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

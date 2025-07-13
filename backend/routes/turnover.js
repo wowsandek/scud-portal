@@ -51,7 +51,6 @@ router.post('/', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Все поля обязательны' });
     }
     
-    // Проверка валидности месяца и года
     const monthNum = parseInt(month);
     const yearNum = parseInt(year);
     if (monthNum < 1 || monthNum > 12) {
@@ -61,9 +60,20 @@ router.post('/', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Год должен быть от 2020 до 2030' });
     }
     
-    // Декодируем оригинальное имя файла
     const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
-    
+
+    // Сбросить isLatest у всех предыдущих отчётов за этот период
+    await prisma.turnover.updateMany({
+      where: {
+        tenantId: parseInt(tenantId),
+        month: monthNum,
+        year: yearNum,
+        isLatest: true
+      },
+      data: { isLatest: false }
+    });
+
+    // Создать новый отчёт (старый утверждённый отчёт остаётся без изменений)
     const turnover = await prisma.turnover.create({
       data: {
         tenantId: parseInt(tenantId),
@@ -75,9 +85,12 @@ router.post('/', upload.single('file'), async (req, res) => {
         fileName: originalName,
         filePath: path.relative(path.join(__dirname, '..'), req.file.path),
         fileSize: req.file.size,
-        fileType: req.file.mimetype
+        fileType: req.file.mimetype,
+        approvalStatus: 'pending',
+        isLatest: true
       }
     });
+
     res.json({ success: true, turnover });
   } catch (err) {
     console.error(err);
@@ -95,6 +108,14 @@ router.get('/tenant/:tenantId', async (req, res) => {
       },
       orderBy: {
         createdAt: 'desc'
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     });
     res.json(turnovers);
@@ -108,20 +129,28 @@ router.get('/tenant/:tenantId', async (req, res) => {
 router.get('/tenant/:tenantId/chart/:year', async (req, res) => {
   try {
     const { tenantId, year } = req.params;
+    // Получаем только approved отчёты за год
     const turnovers = await prisma.turnover.findMany({
       where: {
         tenantId: parseInt(tenantId),
-        year: parseInt(year)
+        year: parseInt(year),
+        approvalStatus: 'approved'
       },
       orderBy: {
         month: 'asc'
       }
     });
-    
-    // Создаем массив данных для всех 12 месяцев
+    // Для каждого месяца берём последний approved отчёт (по updatedAt)
+    const latestByMonth = {};
+    turnovers.forEach(t => {
+      if (!latestByMonth[t.month] || new Date(t.updatedAt) > new Date(latestByMonth[t.month].updatedAt)) {
+        latestByMonth[t.month] = t;
+      }
+    });
+    // Формируем массив для всех 12 месяцев
     const chartData = Array.from({ length: 12 }, (_, index) => {
       const month = index + 1;
-      const turnover = turnovers.find(t => t.month === month);
+      const turnover = latestByMonth[month];
       return {
         month,
         monthName: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -132,7 +161,6 @@ router.get('/tenant/:tenantId/chart/:year', async (req, res) => {
         hasData: !!turnover
       };
     });
-    
     res.json(chartData);
   } catch (err) {
     console.error(err);
@@ -155,11 +183,15 @@ router.get('/all-tenants/:year/:month', async (req, res) => {
       }
     });
     
-    // Получаем товарооборот за указанный период
+    // Получаем все отчёты за указанный период (утверждённые и pending)
     const turnovers = await prisma.turnover.findMany({
       where: {
         year: yearNum,
-        month: monthNum
+        month: monthNum,
+        OR: [
+          { approvalStatus: 'approved' },
+          { approvalStatus: 'pending', isLatest: true }
+        ]
       },
       include: {
         tenant: {
@@ -171,23 +203,41 @@ router.get('/all-tenants/:year/:month', async (req, res) => {
       }
     });
     
-    // Создаем результат с информацией о том, кто сдал, а кто нет
+    // Группируем по tenantId и выбираем приоритет: pending > approved
+    const latestTurnovers = {};
+    turnovers.forEach(turnover => {
+      const key = turnover.tenantId;
+      if (!latestTurnovers[key] || 
+          (turnover.approvalStatus === 'pending' && latestTurnovers[key].approvalStatus === 'approved') ||
+          (turnover.approvalStatus === latestTurnovers[key].approvalStatus && turnover.updatedAt > latestTurnovers[key].updatedAt)) {
+        latestTurnovers[key] = turnover;
+      }
+    });
+    
+    // Формируем результат для всех арендаторов
     const result = tenants.map(tenant => {
-      const turnover = turnovers.find(t => t.tenantId === tenant.id);
+      const turnover = latestTurnovers[tenant.id];
       return {
         tenantId: tenant.id,
         tenantName: tenant.name,
-        hasSubmitted: !!turnover,
-        turnover: turnover || null,
-        submittedAt: turnover?.createdAt || null
+        hasSubmitted: !!turnover, // <--- добавлено
+        amountNoVat: turnover?.amountNoVat || 0,
+        amountWithVat: turnover?.amountWithVat || 0,
+        receiptsCount: turnover?.receiptsCount || 0,
+        fileName: turnover?.fileName || null,
+        filePath: turnover?.filePath || null,
+        submittedAt: turnover?.createdAt || null,
+        updatedAt: turnover?.updatedAt || null,
+        approvalStatus: turnover?.approvalStatus || null,
+        turnover: turnover || null
       };
     });
     
     res.json({
       period: { year: yearNum, month: monthNum },
       totalTenants: tenants.length,
-      submittedCount: turnovers.length,
-      pendingCount: tenants.length - turnovers.length,
+      submittedCount: Object.keys(latestTurnovers).length,
+      pendingCount: tenants.length - Object.keys(latestTurnovers).length,
       data: result
     });
   } catch (err) {
@@ -252,6 +302,190 @@ router.get('/statistics/:year', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// GET /api/turnover/pending-approval - Получить отчеты на утверждение
+router.get('/pending-approval', async (req, res) => {
+  try {
+    const turnovers = await prisma.turnover.findMany({
+      where: {
+        approvalStatus: 'pending',
+        isLatest: true
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: {
+        updatedAt: 'desc'
+      }
+    });
+    
+    // Группируем по tenantId и месяцу/году, берем только самые свежие записи
+    const latestTurnovers = turnovers.reduce((acc, turnover) => {
+      const key = `${turnover.tenantId}-${turnover.month}-${turnover.year}`;
+      if (!acc[key] || acc[key].updatedAt < turnover.updatedAt) {
+        acc[key] = turnover;
+      }
+      return acc;
+    }, {});
+    
+    // Преобразуем обратно в массив
+    const result = Object.values(latestTurnovers);
+    
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// PUT /api/turnover/:id/approve - Утвердить отчет
+router.put('/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Сначала получаем отчёт, который утверждаем
+    const turnoverToApprove = await prisma.turnover.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!turnoverToApprove) {
+      return res.status(404).json({ error: 'Отчёт не найден' });
+    }
+    
+    // Сбрасываем статус всех других отчётов за этот же период
+    await prisma.turnover.updateMany({
+      where: {
+        tenantId: turnoverToApprove.tenantId,
+        month: turnoverToApprove.month,
+        year: turnoverToApprove.year,
+        id: { not: parseInt(id) }
+      },
+      data: {
+        approvalStatus: 'not_approved'
+      }
+    });
+    
+    // Утверждаем выбранный отчёт
+    const turnover = await prisma.turnover.update({
+      where: {
+        id: parseInt(id)
+      },
+      data: {
+        approvalStatus: 'approved'
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+    
+    res.json({ success: true, turnover });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// PUT /api/turnover/:id/reject - Отклонить отчет
+router.put('/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const turnover = await prisma.turnover.update({
+      where: {
+        id: parseInt(id)
+      },
+      data: {
+        approvalStatus: 'rejected'
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+    
+    res.json({ success: true, turnover });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// PUT /api/turnover/:id - Редактировать данные отчёта (только pending/approved)
+router.put('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amountWithVat, amountNoVat, receiptsCount } = req.body;
+
+    // Получаем отчёт
+    const turnover = await prisma.turnover.findUnique({ where: { id: parseInt(id) } });
+    if (!turnover) {
+      return res.status(404).json({ error: 'Отчёт не найден' });
+    }
+    if (!["pending", "approved"].includes(turnover.approvalStatus)) {
+      return res.status(400).json({ error: 'Редактировать можно только pending или approved отчёты' });
+    }
+
+    const updated = await prisma.turnover.update({
+      where: { id: parseInt(id) },
+      data: {
+        amountWithVat: amountWithVat !== undefined ? parseFloat(amountWithVat) : turnover.amountWithVat,
+        amountNoVat: amountNoVat !== undefined ? parseFloat(amountNoVat) : turnover.amountNoVat,
+        receiptsCount: receiptsCount !== undefined ? parseInt(receiptsCount) : turnover.receiptsCount
+      }
+    });
+    res.json({ success: true, turnover: updated });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// GET /api/turnover/:id/download - Скачать файл отчёта
+router.get('/:id/download', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Получаем отчёт
+    const turnover = await prisma.turnover.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!turnover) {
+      return res.status(404).json({ error: 'Отчёт не найден' });
+    }
+    
+    if (!turnover.filePath) {
+      return res.status(404).json({ error: 'Файл не найден' });
+    }
+    
+    // Проверяем существование файла
+    const filePath = path.join(__dirname, '..', turnover.filePath);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Файл не найден на сервере' });
+    }
+    
+    // Отправляем файл
+    res.download(filePath, turnover.fileName);
+    
+  } catch (error) {
+    console.error('Ошибка при скачивании файла:', error);
+    res.status(500).json({ error: 'Ошибка при скачивании файла' });
   }
 });
 

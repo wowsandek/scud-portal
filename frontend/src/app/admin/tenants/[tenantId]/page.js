@@ -15,6 +15,14 @@ export default function TenantDetailPage() {
   const [tenant, setTenant] = useState(null);
   const [users, setUsers] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [turnovers, setTurnovers] = useState([]);
+  const [loadingTurnovers, setLoadingTurnovers] = useState(false);
+  
+  // Фильтры для отчётов
+  const [filterYear, setFilterYear] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterSearch, setFilterSearch] = useState('');
 
   const [newFullName, setNewFullName] = useState('');
   const [newCardNumber, setNewCardNumber] = useState('');
@@ -51,6 +59,7 @@ export default function TenantDetailPage() {
     fetchTenant();
     fetchUsers();
     fetchRequests();
+    fetchTurnovers();
   }, [tenantId]);
 
   useEffect(() => {
@@ -148,6 +157,29 @@ export default function TenantDetailPage() {
     }
   };
 
+  const fetchTurnovers = async () => {
+    try {
+      setLoadingTurnovers(true);
+      const res = await axios.get(`${API_BASE_URL}/api/turnover/tenant/${tenantId}`);
+      setTurnovers(res.data);
+    } catch (err) {
+      console.error('Ошибка при загрузке отчётов:', err);
+    } finally {
+      setLoadingTurnovers(false);
+    }
+  };
+
+  // Функция для скачивания файла
+  const handleDownload = (turnover) => {
+    const downloadUrl = `${API_BASE_URL}/api/turnover/${turnover.id}/download`;
+    window.open(downloadUrl, '_blank');
+  };
+
+  const monthNames = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ];
+
   const addUser = async () => {
     if (!newFullName.trim() || !newCardNumber.trim()) {
       alert("Заполните все поля");
@@ -175,6 +207,29 @@ export default function TenantDetailPage() {
       console.error(err);
     }
   };
+
+  // Фильтрация отчётов
+  const filteredTurnovers = turnovers.filter(turnover => {
+    // Фильтр по году
+    if (filterYear && turnover.year !== parseInt(filterYear)) return false;
+    
+    // Фильтр по месяцу
+    if (filterMonth && turnover.month !== parseInt(filterMonth)) return false;
+    
+    // Фильтр по статусу
+    if (filterStatus && turnover.approvalStatus !== filterStatus) return false;
+    
+    // Поиск по названию файла
+    if (filterSearch && !turnover.fileName.toLowerCase().includes(filterSearch.toLowerCase())) return false;
+    
+    return true;
+  });
+
+  // Получение уникальных годов из отчётов
+  const availableYears = [...new Set(turnovers.map(t => t.year))].sort((a, b) => b - a);
+  
+  // Получение уникальных месяцев из отчётов
+  const availableMonths = [...new Set(turnovers.map(t => t.month))].sort((a, b) => a - b);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -701,6 +756,267 @@ export default function TenantDetailPage() {
                                 </div>
                               </div>
                             )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Turnover Reports Section */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-gray-900 flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <span>История отчётов товарооборота ({turnovers.length})</span>
+                    </h2>
+                    <button
+                      onClick={fetchTurnovers}
+                      disabled={loadingTurnovers}
+                      className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md disabled:opacity-50 text-sm"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>{loadingTurnovers ? "Обновление..." : "Обновить"}</span>
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="p-6">
+                  {/* Фильтры */}
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Фильтры</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {/* Фильтр по году */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Год</label>
+                        <select
+                          value={filterYear}
+                          onChange={(e) => setFilterYear(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        >
+                          <option value="">Все годы</option>
+                          {availableYears.map(year => (
+                            <option key={year} value={year}>{year}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {/* Фильтр по месяцу */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Месяц</label>
+                        <select
+                          value={filterMonth}
+                          onChange={(e) => setFilterMonth(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        >
+                          <option value="">Все месяцы</option>
+                          {availableMonths.map(month => (
+                            <option key={month} value={month}>{monthNames[month - 1]}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {/* Фильтр по статусу */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Статус</label>
+                        <select
+                          value={filterStatus}
+                          onChange={(e) => setFilterStatus(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        >
+                          <option value="">Все статусы</option>
+                          <option value="pending">На утверждении</option>
+                          <option value="approved">Утвержден</option>
+                          <option value="rejected">Не утвержден</option>
+                          <option value="not_approved">Не утвержден (заменен)</option>
+                        </select>
+                      </div>
+                      
+                      {/* Поиск по названию файла */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Поиск по файлу</label>
+                        <input
+                          type="text"
+                          value={filterSearch}
+                          onChange={(e) => setFilterSearch(e.target.value)}
+                          placeholder="Название файла..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Кнопка сброса фильтров */}
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={() => {
+                          setFilterYear('');
+                          setFilterMonth('');
+                          setFilterStatus('');
+                          setFilterSearch('');
+                        }}
+                        className="flex items-center space-x-1 px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-xs transition-colors duration-200"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <span>Сбросить фильтры</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Счетчик результатов */}
+                  <div className="mb-4 text-sm text-gray-600">
+                    Показано {filteredTurnovers.length} из {turnovers.length} отчётов
+                  </div>
+
+                  {loadingTurnovers ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                      <p className="text-gray-500 mt-2">Загрузка истории...</p>
+                    </div>
+                  ) : turnovers.length === 0 ? (
+                    <div className="text-center py-8">
+                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <p className="text-gray-500">История товарооборота пуста</p>
+                      <p className="text-sm text-gray-400">Арентдатор ещё не загружал отчёты</p>
+                    </div>
+                  ) : filteredTurnovers.length === 0 ? (
+                    <div className="text-center py-8">
+                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      <p className="text-gray-500">По вашему запросу ничего не найдено</p>
+                      <p className="text-sm text-gray-400">Попробуйте изменить фильтры</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredTurnovers.map((turnover) => (
+                        <div key={turnover.id} className="bg-gray-50 rounded-lg p-6 border border-gray-200 hover:border-blue-300 transition-colors">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-4 mb-3">
+                                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                  </svg>
+                                </div>
+                                <div>
+                                  <h3 className="text-lg font-semibold text-gray-900">
+                                    {monthNames[turnover.month - 1]} {turnover.year}
+                                  </h3>
+                                  <p className="text-sm text-gray-500">
+                                    Загружено {new Date(turnover.createdAt).toLocaleDateString('ru-RU', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                    {turnover.updatedAt && turnover.updatedAt !== turnover.createdAt && (
+                                      <span className="ml-2 text-orange-600">
+                                        • Обновлено {new Date(turnover.updatedAt).toLocaleDateString('ru-RU', {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                          year: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                  <p className="text-xs text-gray-500 mb-1">Без НДС</p>
+                                  <p className="text-lg font-bold text-blue-600">
+                                    {turnover.amountNoVat.toLocaleString('ru-RU')} ₽
+                                  </p>
+                                </div>
+                                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                  <p className="text-xs text-gray-500 mb-1">С НДС</p>
+                                  <p className="text-lg font-bold text-green-600">
+                                    {turnover.amountWithVat.toLocaleString('ru-RU')} ₽
+                                  </p>
+                                </div>
+                                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                  <p className="text-xs text-gray-500 mb-1">Чеков</p>
+                                  <p className="text-lg font-bold text-purple-600">
+                                    {turnover.receiptsCount.toLocaleString('ru-RU')}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Статус утверждения */}
+                              <div className="mb-4">
+                                {turnover.approvalStatus === 'pending' && (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    На утверждении
+                                  </span>
+                                )}
+                                {turnover.approvalStatus === 'approved' && (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Утвержден
+                                  </span>
+                                )}
+                                {turnover.approvalStatus === 'rejected' && (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    Не утвержден
+                                  </span>
+                                )}
+                                {turnover.approvalStatus === 'not_approved' && (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
+                                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Не утвержден (заменен)
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                  </svg>
+                                  <span className="text-sm text-gray-600">{turnover.fileName}</span>
+                                  <span className="text-xs text-gray-400">
+                                    ({(turnover.fileSize / 1024 / 1024).toFixed(2)} МБ)
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => handleDownload(turnover)}
+                                  className="flex items-center space-x-1 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs transition-colors duration-200"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  <span>Скачать</span>
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ))}

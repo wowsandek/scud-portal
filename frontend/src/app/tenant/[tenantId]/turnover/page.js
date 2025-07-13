@@ -44,7 +44,7 @@ export default function TurnoverPage() {
       const res = await axios.get(`${API_BASE_URL}/api/turnover/tenant/${tenantId}`);
       setTurnovers(res.data);
     } catch (err) {
-      console.error(err);
+      // Можно оставить обработку ошибки, но без вывода в консоль
     } finally {
       setLoadingHistory(false);
     }
@@ -54,9 +54,10 @@ export default function TurnoverPage() {
     setLoadingChart(true);
     try {
       const res = await axios.get(`${API_BASE_URL}/api/turnover/tenant/${tenantId}/chart/${year}`);
-      setChartData(res.data);
+      // Фильтруем только утверждённые отчёты для графиков
+      setChartData(res.data.filter(item => item.hasData));
     } catch (err) {
-      console.error(err);
+      // Можно оставить обработку ошибки, но без вывода в консоль
     } finally {
       setLoadingChart(false);
     }
@@ -99,10 +100,16 @@ export default function TurnoverPage() {
       formData.append("receiptsCount", receiptsCount);
       formData.append("file", file);
       formData.append("tenantId", tenantId);
-      await axios.post(`${API_BASE_URL}/api/turnover`, formData, {
+      const response = await axios.post(`${API_BASE_URL}/api/turnover`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setSuccess("Данные успешно отправлены!");
+      
+      if (response.data.isReplacement) {
+        setSuccess("Отчет успешно обновлен! Статус сброшен на 'На утверждении'.");
+      } else {
+        setSuccess("Данные успешно отправлены!");
+      }
+      
       setMonth("");
       setYear(new Date().getFullYear().toString());
       setAmountNoVat("");
@@ -117,6 +124,27 @@ export default function TurnoverPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  function getStatusBadge(status) {
+    switch (status) {
+      case 'approved':
+        return <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">Утвержден</span>;
+      case 'pending':
+        return <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-yellow-100 text-yellow-800">На утверждении</span>;
+      case 'rejected':
+        return <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">Отклонен</span>;
+      case 'not_approved':
+        return <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-gray-200 text-gray-700">Не утвержден (заменен)</span>;
+      default:
+        return <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-gray-100 text-gray-800">{status}</span>;
+    }
+  }
+
+  // Функция для скачивания файла
+  const handleDownload = (turnover) => {
+    const downloadUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/turnover/${turnover.id}/download`;
+    window.open(downloadUrl, '_blank');
   };
 
   return (
@@ -213,133 +241,6 @@ export default function TurnoverPage() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* График товарооборота */}
-        <div className="bg-white rounded-xl shadow-xl border border-gray-200 p-8 mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Товарооборот</h1>
-            <p className="text-gray-500">Загрузите данные по товарообороту за прошедший месяц</p>
-          </div>
-          <button
-            onClick={() => router.push(`/tenant/${tenantId}`)}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            <span>Назад</span>
-          </button>
-        </div>
-        {error && <div className="mb-4 text-red-600 bg-red-50 border border-red-200 rounded p-2 text-center">{error}</div>}
-        {success && <div className="mb-4 text-green-700 bg-green-50 border border-green-200 rounded p-2 text-center">{success}</div>}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Месяц</label>
-              <select
-                value={month}
-                onChange={e => setMonth(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                required
-              >
-                <option value="">Выберите месяц</option>
-                <option value="1">Январь</option>
-                <option value="2">Февраль</option>
-                <option value="3">Март</option>
-                <option value="4">Апрель</option>
-                <option value="5">Май</option>
-                <option value="6">Июнь</option>
-                <option value="7">Июль</option>
-                <option value="8">Август</option>
-                <option value="9">Сентябрь</option>
-                <option value="10">Октябрь</option>
-                <option value="11">Ноябрь</option>
-                <option value="12">Декабрь</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Год</label>
-              <select
-                value={year}
-                onChange={e => setYear(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                required
-              >
-                <option value="">Выберите год</option>
-                <option value="2020">2020</option>
-                <option value="2021">2021</option>
-                <option value="2022">2022</option>
-                <option value="2023">2023</option>
-                <option value="2024">2024</option>
-                <option value="2025">2025</option>
-                <option value="2026">2026</option>
-                <option value="2027">2027</option>
-                <option value="2028">2028</option>
-                <option value="2029">2029</option>
-                <option value="2030">2030</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Сумма товарооборота без НДС</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={amountNoVat}
-              onChange={e => setAmountNoVat(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-              placeholder="Введите сумму без НДС"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Сумма товарооборота с НДС</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={amountWithVat}
-              onChange={e => setAmountWithVat(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-              placeholder="Введите сумму с НДС"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Количество чеков</label>
-            <input
-              type="number"
-              min="0"
-              step="1"
-              value={receiptsCount}
-              onChange={e => setReceiptsCount(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-              placeholder="Введите количество чеков"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Загрузить файл-отчёт (pdf, png, jpeg, xls, xlsx)</label>
-            <input
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.xls,.xlsx,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg"
-              onChange={handleFileChange}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white"
-              required
-            />
-            {file && <div className="text-xs text-gray-500 mt-1">Файл: {file.name}</div>}
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-3 font-semibold shadow-lg transition text-lg disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {loading ? "Отправка..." : "Отправить"}
-          </button>
-        </form>
         </div>
 
         {/* График товарооборота */}
@@ -678,7 +579,24 @@ export default function TurnoverPage() {
                             {monthNames[turnover.month - 1]} {turnover.year}
                           </h3>
                           <p className="text-sm text-gray-500">
-                            Загружено {new Date(turnover.createdAt).toLocaleDateString('ru-RU')}
+                            Загружено {new Date(turnover.createdAt).toLocaleDateString('ru-RU', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                            {turnover.updatedAt && turnover.updatedAt !== turnover.createdAt && (
+                              <span className="ml-2 text-orange-600">
+                                • Обновлено {new Date(turnover.updatedAt).toLocaleDateString('ru-RU', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -704,14 +622,61 @@ export default function TurnoverPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-2">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                        </svg>
-                        <span className="text-sm text-gray-600">{turnover.fileName}</span>
-                        <span className="text-xs text-gray-400">
-                          ({(turnover.fileSize / 1024 / 1024).toFixed(2)} МБ)
-                        </span>
+                      {/* Статус утверждения */}
+                      <div className="mb-4">
+                        {turnover.approvalStatus === 'pending' && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            На утверждении
+                          </span>
+                        )}
+                        {turnover.approvalStatus === 'approved' && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Утвержден
+                          </span>
+                        )}
+                        {turnover.approvalStatus === 'rejected' && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Не утвержден
+                          </span>
+                        )}
+                        {turnover.approvalStatus === 'not_approved' && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-700">
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Не утвержден (заменен)
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                          </svg>
+                          <span className="text-sm text-gray-600">{turnover.fileName}</span>
+                          <span className="text-xs text-gray-400">
+                            ({(turnover.fileSize / 1024 / 1024).toFixed(2)} МБ)
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleDownload(turnover)}
+                          className="flex items-center space-x-1 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs transition-colors duration-200"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span>Скачать</span>
+                        </button>
                       </div>
                     </div>
                   </div>
