@@ -65,4 +65,5 @@ model Turnover {
   approvedTurnoverId Int?  // ID утвержденного отчета за этот период (если есть)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  pdfFilePath     String? // путь к PDF-версии файла, если есть
 }

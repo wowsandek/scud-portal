@@ -39,6 +39,14 @@ export default function AdminTurnoverPage() {
   const [editValues, setEditValues] = useState({ amountWithVat: '', amountNoVat: '', receiptsCount: '' });
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
+  
+  // Состояние для модального окна просмотра файла
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [viewFileUrl, setViewFileUrl] = useState('');
+  const [viewFileName, setViewFileName] = useState('');
+  const [viewFileType, setViewFileType] = useState('');
+  // Новое состояние для информации об отчёте
+  const [viewTurnoverInfo, setViewTurnoverInfo] = useState(null);
 
   const monthNames = [
     "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
@@ -189,6 +197,71 @@ export default function AdminTurnoverPage() {
     } catch (err) {
       console.error('Ошибка при скачивании файла:', err);
     }
+  };
+
+  // Функция для открытия файла в модальном окне
+  const handleViewFile = async (turnoverId, fileName, fileType, pdfFilePath, turnoverInfo) => {
+    try {
+      // Сохраняем инфо об отчёте
+      setViewTurnoverInfo(turnoverInfo || null);
+      // Если есть PDF-версия, используем её для предпросмотра
+      if (pdfFilePath) {
+        const fileUrl = `${API_BASE_URL}/api/turnover/${turnoverId}/view-pdf`;
+        setViewFileUrl(fileUrl);
+        setViewFileName(fileName);
+        setViewFileType('application/pdf');
+        setViewModalOpen(true);
+      } else {
+        // Иначе используем оригинальный файл
+        const fileUrl = `${API_BASE_URL}/api/turnover/${turnoverId}/view`;
+        const fileExt = fileName.split('.').pop().toLowerCase();
+        
+        // Определяем MIME-тип на основе расширения файла
+        let mimeType = '';
+        switch (fileExt) {
+          case 'pdf':
+            mimeType = 'application/pdf';
+            break;
+          case 'png':
+            mimeType = 'image/png';
+            break;
+          case 'jpg':
+          case 'jpeg':
+            mimeType = 'image/jpeg';
+            break;
+          case 'xlsx':
+            mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            break;
+          case 'xls':
+            mimeType = 'application/vnd.ms-excel';
+            break;
+          case 'docx':
+            mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            break;
+          case 'doc':
+            mimeType = 'application/msword';
+            break;
+          default:
+            mimeType = fileExt;
+        }
+        
+        setViewFileUrl(fileUrl);
+        setViewFileName(fileName);
+        setViewFileType(mimeType);
+        setViewModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Ошибка при открытии файла:', err);
+    }
+  };
+
+  // Функция для закрытия модального окна просмотра
+  const closeViewModal = () => {
+    setViewModalOpen(false);
+    setViewFileUrl('');
+    setViewFileName('');
+    setViewFileType('');
+    setViewTurnoverInfo(null);
   };
 
   // Функции для утверждения отчетов
@@ -708,27 +781,44 @@ export default function AdminTurnoverPage() {
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          {item.turnover && (['pending','approved'].includes(item.approvalStatus)) && (
-                            <button
-                              onClick={() => openEditModal(item)}
-                              className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-md transition-colors ml-2"
-                            >
-                              ✏️ Редактировать
-                            </button>
-                          )}
-                          {item.turnover && item.turnover.filePath && item.turnover.fileName ? (
-                            <button
-                              onClick={() => handleDownloadFile(item.turnover.filePath, item.turnover.fileName)}
-                              className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors"
-                            >
-                              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              Скачать
-                            </button>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
+                          <div className="flex space-x-2">
+                            {item.turnover && (['pending','approved'].includes(item.approvalStatus)) && (
+                              <button
+                                onClick={() => openEditModal(item)}
+                                className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-md transition-colors ml-2"
+                                title="Редактировать"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13h3l8-8a2.828 2.828 0 10-4-4l-8 8v3zm0 0v3h3" />
+                                </svg>
+                              </button>
+                            )}
+                            {item.turnover && item.turnover.filePath && item.turnover.fileName ? (
+                              <>
+                                <button
+                                  onClick={() => handleViewFile(item.turnover.id, item.turnover.fileName, item.turnover.fileType, item.turnover.pdfFilePath, item)}
+                                  className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-md transition-colors ml-2"
+                                  title="Просмотр"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDownloadFile(item.turnover.filePath, item.turnover.fileName)}
+                                  className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md transition-colors ml-2"
+                                  title="Скачать"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -831,31 +921,41 @@ export default function AdminTurnoverPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex space-x-2">
                               <button
-                                onClick={() => handleDownloadFile(turnover.filePath, turnover.fileName)}
-                                className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors"
+                                onClick={() => handleViewFile(turnover.id, turnover.fileName, turnover.fileType, turnover.pdfFilePath, turnover)}
+                                className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-md transition-colors"
+                                title="Просмотр"
                               >
-                                <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDownloadFile(turnover.filePath, turnover.fileName)}
+                                className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md transition-colors"
+                                title="Скачать"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                Скачать
                               </button>
                               <button
                                 onClick={() => handleApprove(turnover.id)}
-                                className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md transition-colors"
+                                className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-2 py-1 rounded-md transition-colors"
+                                title="Утвердить"
                               >
-                                <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </svg>
-                                Утвердить
                               </button>
                               <button
                                 onClick={() => handleReject(turnover.id)}
-                                className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md transition-colors"
+                                className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-md transition-colors"
+                                title="Отклонить"
                               >
-                                <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
-                                Отклонить
                               </button>
                             </div>
                           </td>
@@ -908,6 +1008,82 @@ export default function AdminTurnoverPage() {
             <button onClick={handleEditSave} disabled={editLoading} className="px-4 py-2 bg-blue-600 text-white rounded disabled:bg-gray-400">
               {editLoading ? 'Сохранение...' : 'Сохранить'}
             </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Модальное окно просмотра файла */}
+      <Modal
+        isOpen={viewModalOpen}
+        onRequestClose={closeViewModal}
+        contentLabel="Просмотр файла"
+        ariaHideApp={false}
+        className="fixed inset-0 flex items-center justify-center z-50"
+        overlayClassName="fixed inset-0 bg-black bg-opacity-50 z-40"
+      >
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-full max-h-[90vh] flex flex-col">
+          {/* Заголовок */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-xl font-bold text-gray-900">Просмотр файла: {viewFileName}</h2>
+            <button
+              onClick={closeViewModal}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          {/* Информация об отчёте */}
+          {viewTurnoverInfo && (
+            <div className="mb-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
+                <div><span className="text-gray-500">Арендатор:</span> <span className="font-medium">{viewTurnoverInfo.tenant?.name || viewTurnoverInfo.tenantName || '-'}</span></div>
+                <div><span className="text-gray-500">Период:</span> <span className="font-medium">{monthNames[(viewTurnoverInfo.month || 1) - 1]} {viewTurnoverInfo.year || '-'}</span></div>
+                <div><span className="text-gray-500">Товарооборот с НДС:</span> <span className="font-medium">{(viewTurnoverInfo.amountWithVat ?? viewTurnoverInfo.turnover?.amountWithVat)?.toLocaleString('ru-RU') || '-'}</span></div>
+                <div><span className="text-gray-500">Товарооборот без НДС:</span> <span className="font-medium">{(viewTurnoverInfo.amountNoVat ?? viewTurnoverInfo.turnover?.amountNoVat)?.toLocaleString('ru-RU') || '-'}</span></div>
+                <div><span className="text-gray-500">Чеков:</span> <span className="font-medium">{(viewTurnoverInfo.receiptsCount ?? viewTurnoverInfo.turnover?.receiptsCount)?.toLocaleString('ru-RU') || '-'}</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* Содержимое файла */}
+          <div className="flex-1 p-6 overflow-hidden">
+            {/* Предпросмотр изображения */}
+            {(viewFileType.startsWith('image/') || viewFileUrl.match(/\.(png|jpg|jpeg|gif)$/i)) && (
+              <div className="flex items-center justify-center h-full bg-gray-100">
+                <img
+                  src={viewFileUrl}
+                  alt={viewFileName}
+                  className="max-w-full max-h-[70vh] object-contain mx-auto block border border-gray-200 shadow"
+                />
+              </div>
+            )}
+
+            {/* Предпросмотр PDF */}
+            {viewFileType === 'application/pdf' && (
+              <iframe
+                src={viewFileUrl}
+                className="w-full h-full border-0"
+                title={viewFileName}
+              />
+            )}
+
+            {/* Сообщение для неподдерживаемых форматов */}
+            {!viewFileType.startsWith('image/') && viewFileType !== 'application/pdf' && (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <p className="text-gray-600 mb-4">Этот тип файла не поддерживается для просмотра</p>
+                  <button
+                    onClick={() => handleDownloadFile(viewFileUrl.replace('/view', '/download').replace('/view-pdf', '/download'), viewFileName)}
+                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                  >
+                    Скачать файл
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </Modal>
