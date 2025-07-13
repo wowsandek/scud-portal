@@ -40,6 +40,10 @@ router.get('/:id', async (req, res) => {
         apiKey: true,
         maxStaff: true,
         isDeleted: true,
+        status: true,
+        email: true,
+        phone: true,
+        contactPerson: true,
         _count: {
           select: {
             users: {
@@ -64,7 +68,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const tenantId = parseInt(req.params.id, 10);
-    const { name, maxStaff } = req.body;
+    const { name, maxStaff, email, phone, contactPerson } = req.body;
 
     // Проверяем, что арендатор существует и не удален
     const existingTenant = await prisma.tenant.findUnique({
@@ -98,6 +102,31 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // Обновляем email, если предоставлен
+    if (email !== undefined && email !== null) {
+      if (email.trim() === '') {
+        data.email = null;
+      } else {
+        data.email = email.trim();
+      }
+    }
+    // Обновляем phone, если предоставлен
+    if (phone !== undefined && phone !== null) {
+      if (phone.trim() === '') {
+        data.phone = null;
+      } else {
+        data.phone = phone.trim();
+      }
+    }
+    // Обновляем contactPerson, если предоставлен
+    if (contactPerson !== undefined && contactPerson !== null) {
+      if (contactPerson.trim() === '') {
+        data.contactPerson = null;
+      } else {
+        data.contactPerson = contactPerson.trim();
+      }
+    }
+
     // Проверяем, что есть что обновлять
     if (Object.keys(data).length === 0) {
       return res.status(400).json({ error: 'Nothing to update' });
@@ -111,6 +140,10 @@ router.put('/:id', async (req, res) => {
         name: true,
         apiKey: true,
         maxStaff: true,
+        status: true,
+        email: true,
+        phone: true,
+        contactPerson: true,
         _count: {
           select: {
             users: {

@@ -18,6 +18,9 @@ model Tenant {
   status String @default("pending")
   maxStaff Int?
   isDeleted    Boolean  @default(false)
+  email        String?  @unique
+  phone        String?
+  contactPerson String?
 }
 
 

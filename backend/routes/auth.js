@@ -186,4 +186,76 @@ router.post('/login', async (req, res) => {
   }
 });
 
+/**
+ * ✅ Изменение пароля арендатора
+ */
+router.put('/change-password', async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required.' });
+    }
+
+    const trimmedCurrentPassword = currentPassword.trim();
+    const trimmedNewPassword = newPassword.trim();
+
+    if (!trimmedCurrentPassword || !trimmedNewPassword) {
+      return res.status(400).json({ error: 'Passwords cannot be empty.' });
+    }
+
+    if (trimmedNewPassword.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters long.' });
+    }
+
+    // Получаем ID арендатора из токена
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization token required.' });
+    }
+
+    const token = authHeader.substring(7);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, SECRET);
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+
+    const tenantId = decoded.id;
+
+    // Получаем арендатора
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }
+    });
+
+    if (!tenant || !tenant.passwordHash) {
+      return res.status(404).json({ error: 'Tenant not found.' });
+    }
+
+    // Проверяем текущий пароль
+    const isCurrentPasswordValid = await bcrypt.compare(trimmedCurrentPassword, tenant.passwordHash);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ error: 'Current password is incorrect.' });
+    }
+
+    // Хешируем новый пароль
+    const newPasswordHash = await bcrypt.hash(trimmedNewPassword, 10);
+
+    // Обновляем пароль
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { passwordHash: newPasswordHash }
+    });
+
+    return res.json({ 
+      success: true, 
+      message: 'Password changed successfully.' 
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error during password change.' });
+  }
+});
+
 module.exports = router;

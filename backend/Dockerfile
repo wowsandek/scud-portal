@@ -7,17 +7,16 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Копирование исходного кода
-COPY prisma ./prisma
-COPY routes ./routes
-COPY server.js ./
-COPY .env ./
+# Копирование всех файлов
+COPY . .
+
+# Явное копирование init-db.sh (на случай, если .dockerignore блокирует)
+COPY init-db.sh ./
 
 # Создание папки для загрузок
 RUN mkdir -p uploads/turnover
 
-# Копирование скрипта инициализации
-COPY init-db.sh ./
+# Установка прав на скрипт
 RUN chmod +x init-db.sh
 
 # Генерация Prisma клиента
@@ -25,5 +24,5 @@ RUN npx prisma generate
 
 EXPOSE 3001
 
-# Запуск инициализации и сервера
-CMD ["sh", "-c", "./init-db.sh && node server.js"]
+# Запуск инициализации и сервера напрямую (используем db push вместо migrate deploy)
+CMD ["sh", "-c", "npx prisma db push && npx prisma generate && npm run seed && node server.js"]
