@@ -698,9 +698,9 @@ router.get('/:id/view', async (req, res) => {
     
     // Устанавливаем заголовки для просмотра в браузере
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://localhost:3000");
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://82.202.140.145:3000 http://localhost:3000");
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Origin', 'http://82.202.140.145:3000');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     // Отправляем файл
     res.sendFile(filePath);
@@ -737,9 +737,9 @@ router.get('/:id/view-pdf', async (req, res) => {
     
     // Устанавливаем заголовки для просмотра PDF в браузере
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://localhost:3000");
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://82.202.140.145:3000 http://localhost:3000");
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Origin', 'http://82.202.140.145:3000');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     
     // Отправляем PDF файл

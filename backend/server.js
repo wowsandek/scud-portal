@@ -26,6 +26,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
+      frameAncestors: ["'self'", "http://82.202.140.145:3000", "http://localhost:3000"],
     },
   },
 }));
