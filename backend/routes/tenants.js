@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const SECRET = process.env.JWT_SECRET || 'secret_key';
 
 // ✅ Получить всех арендаторов с количеством сотрудников (только активных)
 router.get('/', async (req, res) => {
@@ -158,6 +161,46 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     console.error('Error updating tenant:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Смена пароля арендатора админом
+router.put('/:id/change-password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({ error: 'Новый пароль должен содержать минимум 6 символов' });
+    }
+    // Проверка роли админа по JWT
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authorization token required.' });
+    }
+    const token = authHeader.substring(7);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, SECRET);
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ error: 'Только администратор может менять пароль арендатора.' });
+    }
+    // Найти арендатора
+    const tenant = await prisma.tenant.findUnique({ where: { id: parseInt(id, 10) } });
+    if (!tenant) {
+      return res.status(404).json({ error: 'Арендатор не найден.' });
+    }
+    const passwordHash = await bcrypt.hash(newPassword.trim(), 10);
+    await prisma.tenant.update({
+      where: { id: parseInt(id, 10) },
+      data: { passwordHash }
+    });
+    return res.json({ success: true, message: 'Пароль успешно изменен.' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Ошибка сервера при смене пароля.' });
   }
 });
 

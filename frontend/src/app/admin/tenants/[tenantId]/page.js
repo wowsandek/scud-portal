@@ -6,6 +6,7 @@ import Link from 'next/link';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { API_BASE_URL } from '../../../../config/api';
+import apiClient from '../../../../lib/api-client';
 
 export default function TenantDetailPage() {
   const router = useRouter();
@@ -17,6 +18,16 @@ export default function TenantDetailPage() {
 
   const [newFullName, setNewFullName] = useState('');
   const [newCardNumber, setNewCardNumber] = useState('');
+
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [contactPerson, setContactPerson] = useState('');
+  const [contactMessage, setContactMessage] = useState({ type: '', text: '' });
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState({ type: '', text: '' });
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -41,6 +52,74 @@ export default function TenantDetailPage() {
     fetchUsers();
     fetchRequests();
   }, [tenantId]);
+
+  useEffect(() => {
+    if (tenant) {
+      setEmail(tenant.email || '');
+      setPhone(tenant.phone || '');
+      setContactPerson(tenant.contactPerson || '');
+    }
+  }, [tenant]);
+
+  const validateEmail = (value) => {
+    if (!value) return true;
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value);
+  };
+  const validatePhone = (value) => {
+    if (!value) return true;
+    return /^[\d\s\-+()]{7,20}$/.test(value);
+  };
+
+  const handleContactSave = async (e) => {
+    e.preventDefault();
+    setContactMessage({ type: '', text: '' });
+    if (email && !validateEmail(email)) {
+      setContactMessage({ type: 'error', text: 'Некорректный email' });
+      return;
+    }
+    if (phone && !validatePhone(phone)) {
+      setContactMessage({ type: 'error', text: 'Некорректный телефон' });
+      return;
+    }
+    try {
+      const res = await apiClient.put(`${API_BASE_URL}/api/tenants/${tenantId}`, {
+        email: email.trim() || null,
+        phone: phone.trim() || null,
+        contactPerson: contactPerson.trim() || null,
+      });
+      setContactMessage({ type: 'success', text: 'Контактные данные успешно обновлены!' });
+      setTenant(res);
+    } catch (err) {
+      setContactMessage({ type: 'error', text: err.response?.data?.error || 'Ошибка при сохранении' });
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setPasswordMessage({ type: '', text: '' });
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ type: 'error', text: 'Новые пароли не совпадают' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordMessage({ type: 'error', text: 'Новый пароль должен содержать минимум 6 символов' });
+      return;
+    }
+    setIsPasswordLoading(true);
+    try {
+      await apiClient.put(`${API_BASE_URL}/api/tenants/${tenantId}/change-password`, {
+        newPassword
+      });
+      setPasswordMessage({ type: 'success', text: 'Пароль успешно изменен!' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setPasswordMessage({ type: 'error', text: err.response?.data?.error || 'Ошибка при изменении пароля' });
+    } finally {
+      setIsPasswordLoading(false);
+    }
+  };
 
   const fetchTenant = async () => {
     try {
@@ -240,6 +319,201 @@ export default function TenantDetailPage() {
                 )}
               </div>
             )}
+
+            {/* Profile Management Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              {/* Contact Information */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center mb-6">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">Контактные данные</h2>
+                </div>
+
+                {contactMessage.text && (
+                  <div className={`mb-4 p-4 rounded-lg border ${
+                    contactMessage.type === 'success' 
+                      ? 'bg-green-50 border-green-200 text-green-700' 
+                      : 'bg-red-50 border-red-200 text-red-700'
+                  }`}>
+                    <div className="flex items-center">
+                      {contactMessage.type === 'success' ? (
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      )}
+                      <span>{contactMessage.text}</span>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleContactSave} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="example@email.com"
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                      Телефон
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="+7 999 123-45-67"
+                      autoComplete="tel"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      Контактное лицо
+                    </label>
+                    <input
+                      type="text"
+                      value={contactPerson}
+                      onChange={e => setContactPerson(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="ФИО контактного лица"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-semibold shadow-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-0.5"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Сохранить контактные данные</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Password Management */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center mb-6">
+                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">Смена пароля</h2>
+                </div>
+
+                {passwordMessage.text && (
+                  <div className={`mb-4 p-4 rounded-lg border ${
+                    passwordMessage.type === 'success' 
+                      ? 'bg-green-50 border-green-200 text-green-700' 
+                      : 'bg-red-50 border-red-200 text-red-700'
+                  }`}>
+                    <div className="flex items-center">
+                      {passwordMessage.type === 'success' ? (
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      )}
+                      <span>{passwordMessage.text}</span>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      Новый пароль
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Введите новый пароль (минимум 6 символов)"
+                      minLength={6}
+                    />
+                    <p className="mt-1 text-sm text-gray-500">Минимум 6 символов</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Подтвердите новый пароль
+                    </label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Повторите новый пароль"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isPasswordLoading}
+                    className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-500 text-white rounded-lg font-semibold shadow-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+                  >
+                    {isPasswordLoading ? (
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    )}
+                    <span className="font-semibold">
+                      {isPasswordLoading ? 'Изменение пароля...' : 'Изменить пароль'}
+                    </span>
+                  </button>
+                </form>
+
+                <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-amber-600 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <div>
+                      <h4 className="text-sm font-medium text-amber-800">Внимание</h4>
+                      <p className="text-sm text-amber-700 mt-1">Новый пароль будет установлен для арендатора. Убедитесь, что пароль соответствует требованиям безопасности.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Staff Section */}
