@@ -45,25 +45,42 @@ const upload = multer({
 
 // POST /api/turnover
 router.post('/', upload.single('file'), async (req, res) => {
+  const startTime = Date.now();
+  
+  console.log(`🔵 [UPLOAD] Начинаем загрузку товарооборота`);
+  console.log(`🔵 [UPLOAD] Время запроса: ${new Date().toISOString()}`);
+  console.log(`🔵 [UPLOAD] Файл:`, req.file ? {
+    originalname: req.file.originalname,
+    size: req.file.size,
+    mimetype: req.file.mimetype
+  } : 'Файл не загружен');
+  
   try {
     const { tenantId, month, year, amountNoVat, amountWithVat, receiptsCount } = req.body;
+    console.log(`🔵 [UPLOAD] Данные запроса:`, { tenantId, month, year, amountNoVat, amountWithVat, receiptsCount });
+    
     if (!tenantId || !month || !year || !amountNoVat || !amountWithVat || !receiptsCount || !req.file) {
+      console.log(`🔴 [UPLOAD] Отсутствуют обязательные поля:`, { tenantId, month, year, amountNoVat, amountWithVat, receiptsCount, hasFile: !!req.file });
       return res.status(400).json({ error: 'Все поля обязательны' });
     }
     
     const monthNum = parseInt(month);
     const yearNum = parseInt(year);
     if (monthNum < 1 || monthNum > 12) {
+      console.log(`🔴 [UPLOAD] Недопустимый месяц: ${monthNum}`);
       return res.status(400).json({ error: 'Месяц должен быть от 1 до 12' });
     }
     if (yearNum < 2020 || yearNum > 2030) {
+      console.log(`🔴 [UPLOAD] Недопустимый год: ${yearNum}`);
       return res.status(400).json({ error: 'Год должен быть от 2020 до 2030' });
     }
     
     const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+    console.log(`🔵 [UPLOAD] Обработанное имя файла: ${originalName}`);
 
     // Сбросить isLatest у всех предыдущих отчётов за этот период
-    await prisma.turnover.updateMany({
+    console.log(`🔵 [UPLOAD] Сбрасываем флаг isLatest для арендатора ${tenantId}, период ${monthNum}/${yearNum}...`);
+    const resetResult = await prisma.turnover.updateMany({
       where: {
         tenantId: parseInt(tenantId),
         month: monthNum,
@@ -72,8 +89,10 @@ router.post('/', upload.single('file'), async (req, res) => {
       },
       data: { isLatest: false }
     });
+    console.log(`🔵 [UPLOAD] Сброшено отчётов: ${resetResult.count}`);
 
     // Создать новый отчёт (старый утверждённый отчёт остаётся без изменений)
+    console.log(`🔵 [UPLOAD] Создаём новый отчёт...`);
     const turnover = await prisma.turnover.create({
       data: {
         tenantId: parseInt(tenantId),
@@ -91,9 +110,17 @@ router.post('/', upload.single('file'), async (req, res) => {
       }
     });
 
+    const duration = Date.now() - startTime;
+    console.log(`✅ [UPLOAD] Товарооборот успешно загружен за ${duration}ms`);
+    console.log(`✅ [UPLOAD] ID отчёта: ${turnover.id}`);
+    console.log(`✅ [UPLOAD] Арендатор: ${tenantId}, период: ${monthNum}/${yearNum}`);
+    console.log(`✅ [UPLOAD] Статус: ${turnover.approvalStatus}`);
+
     res.json({ success: true, turnover });
   } catch (err) {
-    console.error(err);
+    const duration = Date.now() - startTime;
+    console.error(`🔴 [UPLOAD] Ошибка при загрузке товарооборота за ${duration}ms:`, err);
+    console.error(`🔴 [UPLOAD] Stack trace:`, err.stack);
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
@@ -347,20 +374,37 @@ router.get('/pending-approval', async (req, res) => {
 
 // PUT /api/turnover/:id/approve - Утвердить отчет
 router.put('/:id/approve', async (req, res) => {
+  const startTime = Date.now();
+  const { id } = req.params;
+  
+  console.log(`🔵 [APPROVE] Начинаем утверждение отчёта ID: ${id}`);
+  console.log(`🔵 [APPROVE] Время запроса: ${new Date().toISOString()}`);
+  
   try {
-    const { id } = req.params;
-    
     // Сначала получаем отчёт, который утверждаем
+    console.log(`🔵 [APPROVE] Получаем отчёт ID: ${id} из базы данных...`);
     const turnoverToApprove = await prisma.turnover.findUnique({
       where: { id: parseInt(id) }
     });
     
     if (!turnoverToApprove) {
+      console.log(`🔴 [APPROVE] Отчёт ID: ${id} не найден в базе данных`);
       return res.status(404).json({ error: 'Отчёт не найден' });
     }
     
+    console.log(`🔵 [APPROVE] Отчёт найден:`, {
+      id: turnoverToApprove.id,
+      tenantId: turnoverToApprove.tenantId,
+      month: turnoverToApprove.month,
+      year: turnoverToApprove.year,
+      currentStatus: turnoverToApprove.approvalStatus,
+      fileName: turnoverToApprove.fileName
+    });
+    
     // Сбрасываем статус всех других отчётов за этот же период
-    await prisma.turnover.updateMany({
+    console.log(`🔵 [APPROVE] Сбрасываем статус других отчётов за период ${turnoverToApprove.month}/${turnoverToApprove.year} для арендатора ${turnoverToApprove.tenantId}...`);
+    
+    const resetResult = await prisma.turnover.updateMany({
       where: {
         tenantId: turnoverToApprove.tenantId,
         month: turnoverToApprove.month,
@@ -372,7 +416,10 @@ router.put('/:id/approve', async (req, res) => {
       }
     });
     
+    console.log(`🔵 [APPROVE] Сброшено отчётов: ${resetResult.count}`);
+    
     // Утверждаем выбранный отчёт
+    console.log(`🔵 [APPROVE] Утверждаем отчёт ID: ${id}...`);
     const turnover = await prisma.turnover.update({
       where: {
         id: parseInt(id)
@@ -390,18 +437,51 @@ router.put('/:id/approve', async (req, res) => {
       }
     });
     
+    const duration = Date.now() - startTime;
+    console.log(`✅ [APPROVE] Отчёт ID: ${id} успешно утверждён за ${duration}ms`);
+    console.log(`✅ [APPROVE] Финальный статус: ${turnover.approvalStatus}`);
+    console.log(`✅ [APPROVE] Арендатор: ${turnover.tenant.name} (ID: ${turnover.tenant.id})`);
+    
     res.json({ success: true, turnover });
   } catch (err) {
-    console.error(err);
+    const duration = Date.now() - startTime;
+    console.error(`🔴 [APPROVE] Ошибка при утверждении отчёта ID: ${id} за ${duration}ms:`, err);
+    console.error(`🔴 [APPROVE] Stack trace:`, err.stack);
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
 
 // PUT /api/turnover/:id/reject - Отклонить отчет
 router.put('/:id/reject', async (req, res) => {
+  const startTime = Date.now();
+  const { id } = req.params;
+  
+  console.log(`🔵 [REJECT] Начинаем отклонение отчёта ID: ${id}`);
+  console.log(`🔵 [REJECT] Время запроса: ${new Date().toISOString()}`);
+  
   try {
-    const { id } = req.params;
+    // Сначала получаем отчёт для проверки
+    console.log(`🔵 [REJECT] Получаем отчёт ID: ${id} из базы данных...`);
+    const turnoverToReject = await prisma.turnover.findUnique({
+      where: { id: parseInt(id) }
+    });
     
+    if (!turnoverToReject) {
+      console.log(`🔴 [REJECT] Отчёт ID: ${id} не найден в базе данных`);
+      return res.status(404).json({ error: 'Отчёт не найден' });
+    }
+    
+    console.log(`🔵 [REJECT] Отчёт найден:`, {
+      id: turnoverToReject.id,
+      tenantId: turnoverToReject.tenantId,
+      month: turnoverToReject.month,
+      year: turnoverToReject.year,
+      currentStatus: turnoverToReject.approvalStatus,
+      fileName: turnoverToReject.fileName
+    });
+    
+    // Отклоняем отчёт
+    console.log(`🔵 [REJECT] Отклоняем отчёт ID: ${id}...`);
     const turnover = await prisma.turnover.update({
       where: {
         id: parseInt(id)
@@ -419,28 +499,56 @@ router.put('/:id/reject', async (req, res) => {
       }
     });
     
+    const duration = Date.now() - startTime;
+    console.log(`✅ [REJECT] Отчёт ID: ${id} успешно отклонён за ${duration}ms`);
+    console.log(`✅ [REJECT] Финальный статус: ${turnover.approvalStatus}`);
+    console.log(`✅ [REJECT] Арендатор: ${turnover.tenant.name} (ID: ${turnover.tenant.id})`);
+    
     res.json({ success: true, turnover });
   } catch (err) {
-    console.error(err);
+    const duration = Date.now() - startTime;
+    console.error(`🔴 [REJECT] Ошибка при отклонении отчёта ID: ${id} за ${duration}ms:`, err);
+    console.error(`🔴 [REJECT] Stack trace:`, err.stack);
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
 
 // PUT /api/turnover/:id - Редактировать данные отчёта (только pending/approved)
 router.put('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { amountWithVat, amountNoVat, receiptsCount } = req.body;
+  const startTime = Date.now();
+  const { id } = req.params;
+  const { amountWithVat, amountNoVat, receiptsCount } = req.body;
 
+  console.log(`🔵 [EDIT] Начинаем редактирование отчёта ID: ${id}`);
+  console.log(`🔵 [EDIT] Время запроса: ${new Date().toISOString()}`);
+  console.log(`🔵 [EDIT] Новые данные:`, { amountWithVat, amountNoVat, receiptsCount });
+
+  try {
     // Получаем отчёт
+    console.log(`🔵 [EDIT] Получаем отчёт ID: ${id} из базы данных...`);
     const turnover = await prisma.turnover.findUnique({ where: { id: parseInt(id) } });
     if (!turnover) {
+      console.log(`🔴 [EDIT] Отчёт ID: ${id} не найден в базе данных`);
       return res.status(404).json({ error: 'Отчёт не найден' });
     }
+    
+    console.log(`🔵 [EDIT] Отчёт найден:`, {
+      id: turnover.id,
+      tenantId: turnover.tenantId,
+      month: turnover.month,
+      year: turnover.year,
+      currentStatus: turnover.approvalStatus,
+      currentAmountWithVat: turnover.amountWithVat,
+      currentAmountNoVat: turnover.amountNoVat,
+      currentReceiptsCount: turnover.receiptsCount
+    });
+    
     if (!["pending", "approved"].includes(turnover.approvalStatus)) {
+      console.log(`🔴 [EDIT] Отчёт ID: ${id} имеет недопустимый статус: ${turnover.approvalStatus}`);
       return res.status(400).json({ error: 'Редактировать можно только pending или approved отчёты' });
     }
 
+    console.log(`🔵 [EDIT] Обновляем данные отчёта ID: ${id}...`);
     const updated = await prisma.turnover.update({
       where: { id: parseInt(id) },
       data: {
@@ -449,9 +557,20 @@ router.put('/:id', async (req, res) => {
         receiptsCount: receiptsCount !== undefined ? parseInt(receiptsCount) : turnover.receiptsCount
       }
     });
+    
+    const duration = Date.now() - startTime;
+    console.log(`✅ [EDIT] Отчёт ID: ${id} успешно обновлён за ${duration}ms`);
+    console.log(`✅ [EDIT] Новые значения:`, {
+      amountWithVat: updated.amountWithVat,
+      amountNoVat: updated.amountNoVat,
+      receiptsCount: updated.receiptsCount
+    });
+    
     res.json({ success: true, turnover: updated });
   } catch (err) {
-    console.error(err);
+    const duration = Date.now() - startTime;
+    console.error(`🔴 [EDIT] Ошибка при редактировании отчёта ID: ${id} за ${duration}ms:`, err);
+    console.error(`🔴 [EDIT] Stack trace:`, err.stack);
     res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
