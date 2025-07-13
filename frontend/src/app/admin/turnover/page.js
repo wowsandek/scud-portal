@@ -18,6 +18,10 @@ export default function AdminTurnoverPage() {
   const [filterStatus, setFilterStatus] = useState('all'); // all, submitted, pending
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Состояние для сортировки
+  const [sortField, setSortField] = useState('tenantName');
+  const [sortDirection, setSortDirection] = useState('asc');
+  
   // Состояние для данных
   const [periodData, setPeriodData] = useState(null);
   const [yearlyStats, setYearlyStats] = useState(null);
@@ -62,8 +66,61 @@ export default function AdminTurnoverPage() {
     fetchYearlyStats();
   }, [selectedYear, selectedMonth]);
 
-  // Фильтрация данных
-  const filteredData = periodData?.data?.filter(item => {
+  // Функция сортировки
+  const sortData = (data) => {
+    return data.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortField) {
+        case 'tenantName':
+          aValue = a.tenantName.toLowerCase();
+          bValue = b.tenantName.toLowerCase();
+          break;
+        case 'status':
+          aValue = a.hasSubmitted ? 1 : 0;
+          bValue = b.hasSubmitted ? 1 : 0;
+          break;
+        case 'turnoverWithVat':
+          aValue = a.turnover?.amountWithVat || 0;
+          bValue = b.turnover?.amountWithVat || 0;
+          break;
+        case 'turnoverNoVat':
+          aValue = a.turnover?.amountNoVat || 0;
+          bValue = b.turnover?.amountNoVat || 0;
+          break;
+        case 'receiptsCount':
+          aValue = a.turnover?.receiptsCount || 0;
+          bValue = b.turnover?.receiptsCount || 0;
+          break;
+        case 'submittedAt':
+          aValue = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+          bValue = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+          break;
+        default:
+          aValue = a[sortField];
+          bValue = b[sortField];
+      }
+      
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+  };
+
+  // Обработчик сортировки
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Фильтрация и сортировка данных
+  const filteredData = sortData(periodData?.data?.filter(item => {
     const matchesStatus = filterStatus === 'all' || 
       (filterStatus === 'submitted' && item.hasSubmitted) ||
       (filterStatus === 'pending' && !item.hasSubmitted);
@@ -71,7 +128,7 @@ export default function AdminTurnoverPage() {
     const matchesSearch = item.tenantName.toLowerCase().includes(searchTerm.toLowerCase());
     
     return matchesStatus && matchesSearch;
-  }) || [];
+  }) || []);
 
   // Данные для круговой диаграммы
   const pieData = periodData ? [
@@ -336,20 +393,83 @@ export default function AdminTurnoverPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Арендатор
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('tenantName')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Арендатор</span>
+                      {sortField === 'tenantName' && (
+                        <svg className={`w-4 h-4 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Статус
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Статус</span>
+                      {sortField === 'status' && (
+                        <svg className={`w-4 h-4 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Товарооборот
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('turnoverWithVat')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Товарооборот с НДС</span>
+                      {sortField === 'turnoverWithVat' && (
+                        <svg className={`w-4 h-4 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Чеков
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('turnoverNoVat')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Товарооборот без НДС</span>
+                      {sortField === 'turnoverNoVat' && (
+                        <svg className={`w-4 h-4 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                      )}
+                    </div>
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Дата сдачи
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('receiptsCount')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Чеков</span>
+                      {sortField === 'receiptsCount' && (
+                        <svg className={`w-4 h-4 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('submittedAt')}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Дата сдачи</span>
+                      {sortField === 'submittedAt' && (
+                        <svg className={`w-4 h-4 ${sortDirection === 'asc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                      )}
+                    </div>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Действия
@@ -381,13 +501,17 @@ export default function AdminTurnoverPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {item.turnover ? (
-                        <div>
-                          <div className="font-medium">
-                            {(item.turnover.amountWithVat / 1000000).toFixed(1)}M ₽
-                          </div>
-                          <div className="text-gray-500 text-xs">
-                            Без НДС: {(item.turnover.amountNoVat / 1000000).toFixed(1)}M ₽
-                          </div>
+                        <div className="font-medium">
+                          {item.turnover.amountWithVat.toLocaleString('ru-RU')} ₽
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {item.turnover ? (
+                        <div className="font-medium">
+                          {item.turnover.amountNoVat.toLocaleString('ru-RU')} ₽
                         </div>
                       ) : (
                         <span className="text-gray-400">-</span>
