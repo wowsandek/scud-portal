@@ -78,6 +78,44 @@ router.post('/', upload.single('file'), async (req, res) => {
     const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
     console.log(`🔵 [UPLOAD] Обработанное имя файла: ${originalName}`);
 
+    // --- КОНВЕРТАЦИЯ В PDF ---
+    let pdfFilePath = null;
+    const ext = path.extname(req.file.filename).toLowerCase();
+    const excelOrWord = ['.xlsx', '.xls', '.docx', '.doc'].includes(ext);
+    if (excelOrWord) {
+      // Путь к исходному файлу
+      const inputPath = req.file.path;
+      // Путь к папке для PDF
+      const outputDir = path.dirname(inputPath);
+      // Ожидаемое имя PDF
+      const pdfName = req.file.filename + '.pdf';
+      const pdfFullPath = path.join(outputDir, pdfName);
+      try {
+        // Конвертация через LibreOffice с альбомной ориентацией
+        const { execSync } = require('child_process');
+        let convertCmd = '';
+        if (['.xlsx', '.xls'].includes(ext)) {
+          convertCmd = `libreoffice --headless --convert-to pdf:\"calc_pdf_Export:PageOrientation=2\" --outdir "${outputDir}" "${inputPath}"`;
+        } else if (['.docx', '.doc'].includes(ext)) {
+          convertCmd = `libreoffice --headless --convert-to pdf:\"writer_pdf_Export:PageOrientation=2\" --outdir "${outputDir}" "${inputPath}"`;
+        } else {
+          convertCmd = `libreoffice --headless --convert-to pdf --outdir "${outputDir}" "${inputPath}"`;
+        }
+        execSync(convertCmd);
+        // Найти PDF-файл (LibreOffice может дать имя без .xlsx/.docx)
+        const baseName = path.basename(req.file.filename, ext);
+        const possiblePdf = path.join(outputDir, baseName + '.pdf');
+        if (fs.existsSync(possiblePdf)) {
+          pdfFilePath = path.relative(path.join(__dirname, '..'), possiblePdf);
+        } else if (fs.existsSync(pdfFullPath)) {
+          pdfFilePath = path.relative(path.join(__dirname, '..'), pdfFullPath);
+        }
+      } catch (e) {
+        console.error('Ошибка конвертации в PDF:', e);
+      }
+    }
+    // --- КОНЕЦ КОНВЕРТАЦИИ ---
+
     // Сбросить isLatest у всех предыдущих отчётов за этот период
     console.log(`🔵 [UPLOAD] Сбрасываем флаг isLatest для арендатора ${tenantId}, период ${monthNum}/${yearNum}...`);
     const resetResult = await prisma.turnover.updateMany({
@@ -106,7 +144,8 @@ router.post('/', upload.single('file'), async (req, res) => {
         fileSize: req.file.size,
         fileType: req.file.mimetype,
         approvalStatus: 'pending',
-        isLatest: true
+        isLatest: true,
+        pdfFilePath: pdfFilePath || null
       }
     });
 
@@ -605,6 +644,110 @@ router.get('/:id/download', async (req, res) => {
   } catch (error) {
     console.error('Ошибка при скачивании файла:', error);
     res.status(500).json({ error: 'Ошибка при скачивании файла' });
+  }
+});
+
+// GET /api/turnover/:id/view - Просмотреть файл отчёта в браузере
+router.get('/:id/view', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Получаем отчёт
+    const turnover = await prisma.turnover.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!turnover) {
+      return res.status(404).json({ error: 'Отчёт не найден' });
+    }
+    
+    if (!turnover.filePath) {
+      return res.status(404).json({ error: 'Файл не найден' });
+    }
+    
+    // Проверяем существование файла
+    const filePath = path.join(__dirname, '..', turnover.filePath);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Файл не найден на сервере' });
+    }
+    
+    // Определяем MIME-тип файла
+    const ext = path.extname(turnover.fileName).toLowerCase();
+    let contentType = 'application/octet-stream';
+    
+    switch (ext) {
+      case '.pdf':
+        contentType = 'application/pdf';
+        break;
+      case '.png':
+        contentType = 'image/png';
+        break;
+      case '.jpg':
+      case '.jpeg':
+        contentType = 'image/jpeg';
+        break;
+      case '.xlsx':
+        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        break;
+      case '.xls':
+        contentType = 'application/vnd.ms-excel';
+        break;
+      default:
+        contentType = 'application/octet-stream';
+    }
+    
+    // Устанавливаем заголовки для просмотра в браузере
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://localhost:3000");
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    // Отправляем файл
+    res.sendFile(filePath);
+    
+  } catch (error) {
+    console.error('Ошибка при просмотре файла:', error);
+    res.status(500).json({ error: 'Ошибка при просмотре файла' });
+  }
+});
+
+// GET /api/turnover/:id/view-pdf - Просмотр PDF-версии файла
+router.get('/:id/view-pdf', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Получаем отчёт
+    const turnover = await prisma.turnover.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!turnover) {
+      return res.status(404).json({ error: 'Отчёт не найден' });
+    }
+    
+    if (!turnover.pdfFilePath) {
+      return res.status(404).json({ error: 'PDF-версия не найдена' });
+    }
+    
+    // Проверяем существование PDF файла
+    const filePath = path.join(__dirname, '..', turnover.pdfFilePath);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'PDF-файл не найден на сервере' });
+    }
+    
+    // Устанавливаем заголовки для просмотра PDF в браузере
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' http://localhost:3000");
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    // Отправляем PDF файл
+    res.sendFile(filePath);
+    
+  } catch (error) {
+    console.error('Ошибка при просмотре PDF:', error);
+    res.status(500).json({ error: 'Ошибка при просмотре PDF' });
   }
 });
 
