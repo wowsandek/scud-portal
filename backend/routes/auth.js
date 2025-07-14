@@ -9,55 +9,128 @@ const crypto = require('crypto');
 const SECRET = process.env.JWT_SECRET || 'secret_key';
 
 /**
- * ✅ Регистрация нового арендатора
- * Статус по умолчанию — 'pending' для ручного одобрения админом
+ * ✅ Получить список магазинов доступных для регистрации
+ * Возвращает магазины где:
+ * - нет passwordHash (никто не зарегистрировался) 
+ * - статус active (одобрен админом)
+ * - не удален
+ */
+router.get('/available-stores', async (req, res) => {
+  try {
+    const availableStores = await prisma.tenant.findMany({
+      where: {
+        isDeleted: false,
+        status: 'active',
+        passwordHash: null
+      },
+      select: {
+        id: true,
+        name: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
+    return res.json(availableStores);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error while fetching available stores.' });
+  }
+});
+
+/**
+ * ✅ Регистрация под существующий магазин
+ * Обновляет существующий магазин с контактными данными и паролем
  */
 router.post('/register', async (req, res) => {
   try {
-    const { name, password } = req.body;
+    const { storeId, password, email, phone, contactPerson } = req.body;
 
-    if (!name || !password) {
-      return res.status(400).json({ error: 'Name and password are required.' });
+    // Валидация обязательных полей
+    if (!storeId || !password || !email || !contactPerson) {
+      return res.status(400).json({ 
+        error: 'Store selection, password, email and contact person are required.' 
+      });
     }
 
-    const trimmedName = name.trim();
     const trimmedPassword = password.trim();
+    const trimmedEmail = email.trim();
+    const trimmedContactPerson = contactPerson.trim();
+    const trimmedPhone = phone ? phone.trim() : null;
 
-    if (!trimmedName || !trimmedPassword) {
-      return res.status(400).json({ error: 'Name and password cannot be empty.' });
+    if (!trimmedPassword || !trimmedEmail || !trimmedContactPerson) {
+      return res.status(400).json({ 
+        error: 'Password, email and contact person cannot be empty.' 
+      });
     }
 
-    // Проверка на дубликаты (включая удаленные)
-    const existingTenant = await prisma.tenant.findFirst({
-      where: { name: trimmedName }
+    // Валидация email
+    const emailRegex = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    // Валидация телефона если указан
+    if (trimmedPhone) {
+      const phoneRegex = /^[\d\s\-+()]{7,20}$/;
+      if (!phoneRegex.test(trimmedPhone)) {
+        return res.status(400).json({ error: 'Please enter a valid phone number.' });
+      }
+    }
+
+    // Проверяем, что магазин существует и доступен для регистрации
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: parseInt(storeId) }
     });
-    if (existingTenant) {
-      return res.status(400).json({ error: 'Tenant with this name already exists.' });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Store not found.' });
+    }
+
+    if (tenant.isDeleted || tenant.status !== 'active') {
+      return res.status(400).json({ error: 'This store is not available for registration.' });
+    }
+
+    // Проверяем, что магазин доступен для регистрации (нет пароля = никто не зарегистрировался)
+    if (tenant.passwordHash) {
+      return res.status(400).json({ 
+        error: 'This store already has an account.' 
+      });
+    }
+
+    // Проверяем уникальность email среди всех арендаторов
+    const existingEmail = await prisma.tenant.findFirst({
+      where: { 
+        email: trimmedEmail,
+        id: { not: parseInt(storeId) }
+      }
+    });
+
+    if (existingEmail) {
+      return res.status(400).json({ error: 'This email is already in use by another store.' });
     }
 
     // Генерация хэша пароля
     const passwordHash = await bcrypt.hash(trimmedPassword, 10);
 
-    // Генерация случайного apiKey
-    const apiKey = crypto.randomBytes(10).toString('hex');
-
-    const autoApprove = process.env.AUTO_APPROVE_REGISTRATIONS === 'true';
-
-    const newTenant = await prisma.tenant.create({
+    // Обновляем магазин с контактными данными и паролем, и меняем статус на pending
+    const updatedTenant = await prisma.tenant.update({
+      where: { id: parseInt(storeId) },
       data: {
-        name: trimmedName,
         passwordHash,
-        apiKey,
-        status: autoApprove ? 'active' : 'pending'
+        email: trimmedEmail,
+        phone: trimmedPhone,
+        contactPerson: trimmedContactPerson,
+        status: 'pending' // Ожидает одобрения админом
       }
     });
 
     return res.json({
       success: true,
-      message: autoApprove
-        ? 'Registration successful and account is active.'
-        : 'Registration submitted for approval.',
-      tenantId: newTenant.id
+      message: 'Registration submitted for approval. Please wait for admin confirmation.',
+      tenantId: updatedTenant.id,
+      storeName: updatedTenant.name
     });
   } catch (err) {
     console.error(err);
@@ -77,7 +150,10 @@ router.get('/pending-tenants', async (req, res) => {
       },
       select: {
         id: true,
-        name: true
+        name: true,
+        email: true,
+        phone: true,
+        contactPerson: true
       }
     });
     return res.json(pendingTenants);
@@ -117,6 +193,42 @@ router.post('/approve/:id', async (req, res) => {
 
 /**
  * ✅ Отклонить регистрацию арендатора
+ * Очищает контактные данные и пароль, возвращает статус на 'active'
+ */
+router.delete('/reject/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+
+    const tenant = await prisma.tenant.findUnique({ where: { id } });
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found.' });
+    }
+
+    if (tenant.status !== 'pending') {
+      return res.status(400).json({ error: 'Can only reject pending registrations.' });
+    }
+
+    // Очищаем контактные данные и пароль, возвращаем статус active
+    await prisma.tenant.update({
+      where: { id },
+      data: { 
+        passwordHash: null,
+        email: null,
+        phone: null,
+        contactPerson: null,
+        status: 'active'
+      }
+    });
+
+    return res.json({ success: true, message: 'Registration rejected. Store is available for registration again.' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error during rejection.' });
+  }
+});
+
+/**
+ * ✅ Отклонить регистрацию арендатора
  */
 router.delete('/reject/:id', async (req, res) => {
   try {
@@ -137,27 +249,41 @@ router.delete('/reject/:id', async (req, res) => {
 
 /**
  * ✅ Логин
+ * Админ входит по имени (name), обычные пользователи по email
  */
 router.post('/login', async (req, res) => {
   try {
-    const { name, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!name || !password) {
-      return res.status(400).json({ error: 'Name and password are required.' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
 
-    const tenant = await prisma.tenant.findFirst({
-      where: { 
-        name: trimmedName,
-        isDeleted: false
-      }
-    });
+    let tenant;
+
+    // Если это админ (логин 'admin'), ищем по name
+    if (trimmedEmail === 'admin') {
+      tenant = await prisma.tenant.findFirst({
+        where: { 
+          name: 'admin',
+          isDeleted: false
+        }
+      });
+    } else {
+      // Для обычных пользователей ищем по email
+      tenant = await prisma.tenant.findFirst({
+        where: { 
+          email: trimmedEmail,
+          isDeleted: false
+        }
+      });
+    }
 
     if (!tenant || !tenant.passwordHash) {
-      return res.status(401).json({ error: 'Invalid credentials. Check your name and password.' });
+      return res.status(401).json({ error: 'Invalid credentials. Check your email and password.' });
     }
 
     if (tenant.status !== 'active') {
@@ -166,7 +292,7 @@ router.post('/login', async (req, res) => {
 
     const isMatch = await bcrypt.compare(trimmedPassword, tenant.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid credentials. Check your name and password.' });
+      return res.status(401).json({ error: 'Invalid credentials. Check your email and password.' });
     }
 
     const role = tenant.name === 'admin' ? 'admin' : 'tenant';
@@ -174,6 +300,7 @@ router.post('/login', async (req, res) => {
     const payload = {
       id: tenant.id,
       name: tenant.name,
+      email: tenant.email,
       role,
       tenantId: tenant.id
     };

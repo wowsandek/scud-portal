@@ -23,18 +23,36 @@ async function main() {
     console.log('Admin created successfully!');
   }
 
-  // Создаем тестовых арендаторов
+  // Создаем тестовых арендаторов (магазины без аккаунтов для тестирования новой логики регистрации)
   const testTenants = [
     {
-      name: 'KazanMall',
+      name: 'Магазин электроники "Техномир"',
       status: 'active',
       maxStaff: 50,
       apiKey: Math.random().toString(36).slice(2, 12)
     },
     {
-      name: 'TestStore',
+      name: 'Одежда и обувь "Стиль"',
       status: 'active',
       maxStaff: 25,
+      apiKey: Math.random().toString(36).slice(2, 12)
+    },
+    {
+      name: 'Спортивные товары "Чемпион"',
+      status: 'active',
+      maxStaff: 30,
+      apiKey: Math.random().toString(36).slice(2, 12)
+    },
+    {
+      name: 'Детские товары "Малыш"',
+      status: 'active',
+      maxStaff: 20,
+      apiKey: Math.random().toString(36).slice(2, 12)
+    },
+    {
+      name: 'Косметика и парфюмерия "Красота"',
+      status: 'active',
+      maxStaff: 15,
       apiKey: Math.random().toString(36).slice(2, 12)
     }
   ];

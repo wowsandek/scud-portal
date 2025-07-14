@@ -7,7 +7,7 @@ import { API_BASE_URL } from "../../config/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -17,7 +17,7 @@ export default function LoginPage() {
 
     try {
       const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
-        name,
+        email,
         password,
       });
 
@@ -30,7 +30,7 @@ export default function LoginPage() {
         router.push(`/tenant/${payload.tenantId}`);
       }
     } catch (err) {
-      setError("Неверные имя или пароль. Попробуйте снова.");
+      setError("Неверный email или пароль. Попробуйте снова.");
     }
   };
 
@@ -59,14 +59,14 @@ export default function LoginPage() {
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
               </svg>
             </span>
             <input
-              type="text"
-              placeholder="Имя пользователя"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              type="email"
+              placeholder="Email (или 'admin' для администратора)"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full border border-gray-300 rounded-lg p-3 pl-11 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition text-base bg-white"
               required
               autoFocus

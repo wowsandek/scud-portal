@@ -16,6 +16,14 @@ export default function TenantsListPage() {
   const [newName, setNewName] = useState('');
   const [newMaxStaff, setNewMaxStaff] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  
+  // Состояние для создания нового магазина
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createStoreName, setCreateStoreName] = useState('');
+  const [createStoreMaxStaff, setCreateStoreMaxStaff] = useState('');
+  const [createMessage, setCreateMessage] = useState({ type: '', text: '' });
+  const [isCreating, setIsCreating] = useState(false);
+  
   const router = useRouter();
 
   useEffect(() => {
@@ -117,6 +125,48 @@ export default function TenantsListPage() {
     }
   };
 
+  const createStore = async (e) => {
+    e.preventDefault();
+    setCreateMessage({ type: '', text: '' });
+    setIsCreating(true);
+
+    if (!createStoreName.trim()) {
+      setCreateMessage({ type: 'error', text: 'Название магазина обязательно' });
+      setIsCreating(false);
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/api/tenants`, {
+        name: createStoreName.trim(),
+        maxStaff: createStoreMaxStaff === '' ? null : parseInt(createStoreMaxStaff)
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      setCreateMessage({ type: 'success', text: 'Магазин успешно создан!' });
+      setCreateStoreName('');
+      setCreateStoreMaxStaff('');
+      fetchTenants();
+      
+      // Закрываем модальное окно через 2 секунды
+      setTimeout(() => {
+        setShowCreateModal(false);
+        setCreateMessage({ type: '', text: '' });
+      }, 2000);
+    } catch (err) {
+      setCreateMessage({ 
+        type: 'error', 
+        text: err.response?.data?.error || 'Ошибка при создании магазина' 
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
@@ -135,6 +185,15 @@ export default function TenantsListPage() {
               </div>
             </div>
             <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <span>Создать магазин</span>
+              </button>
               <Link
                 href="/admin"
                 className="flex items-center space-x-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
@@ -624,6 +683,118 @@ export default function TenantsListPage() {
           </div>
         )}
       </div>
+
+      {/* Модальное окно создания магазина */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Создать новый магазин</h2>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setCreateMessage({ type: '', text: '' });
+                  setCreateStoreName('');
+                  setCreateStoreMaxStaff('');
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {createMessage.text && (
+              <div className={`mb-4 p-3 rounded-lg ${
+                createMessage.type === 'success' 
+                  ? 'bg-green-50 border border-green-200 text-green-800' 
+                  : 'bg-red-50 border border-red-200 text-red-800'
+              }`}>
+                <div className="flex items-center">
+                  {createMessage.type === 'success' ? (
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                  <span>{createMessage.text}</span>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={createStore} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Название магазина *
+                </label>
+                <input
+                  type="text"
+                  value={createStoreName}
+                  onChange={(e) => setCreateStoreName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Введите название магазина"
+                  required
+                  disabled={isCreating}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Лимит сотрудников (необязательно)
+                </label>
+                <input
+                  type="number"
+                  value={createStoreMaxStaff}
+                  onChange={(e) => setCreateStoreMaxStaff(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Оставьте пустым для безлимитного"
+                  min="0"
+                  disabled={isCreating}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Оставьте пустым для безлимитного количества сотрудников
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={isCreating || !createStoreName.trim()}
+                  className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
+                >
+                  {isCreating ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  )}
+                  <span>{isCreating ? 'Создание...' : 'Создать магазин'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreateMessage({ type: '', text: '' });
+                    setCreateStoreName('');
+                    setCreateStoreMaxStaff('');
+                  }}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md"
+                  disabled={isCreating}
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

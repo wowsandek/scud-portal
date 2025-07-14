@@ -76,17 +76,13 @@ export default function ProfilePage() {
   const handleContactSave = async (e) => {
     e.preventDefault();
     setContactMessage({ type: '', text: '' });
-    if (email && !validateEmail(email)) {
-      setContactMessage({ type: 'error', text: 'Некорректный email' });
-      return;
-    }
     if (phone && !validatePhone(phone)) {
       setContactMessage({ type: 'error', text: 'Некорректный телефон' });
       return;
     }
     try {
       const res = await apiClient.put(`${API_BASE_URL}/api/tenants/${tenantId}`, {
-        email: email.trim() || null,
+        // email не отправляем, так как арендатор не может его изменять
         phone: phone.trim() || null,
         contactPerson: contactPerson.trim() || null,
       });
@@ -303,15 +299,19 @@ export default function ProfilePage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
                     Email
+                    <span className="text-gray-500 text-xs ml-2">(только для чтения)</span>
                   </label>
                   <input
                     type="email"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                    readOnly
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
                     placeholder="example@email.com"
                     autoComplete="email"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Email не может быть изменен арендатором. Обратитесь к администратору для изменения.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

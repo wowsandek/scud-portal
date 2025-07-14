@@ -42,13 +42,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// Rate limiting
+// Rate limiting (skip for localhost during development)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 минут
   max: 100, // максимум 100 запросов с одного IP
   message: 'Слишком много запросов с этого IP, попробуйте позже.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req, res) => {
+    // Skip rate limiting for localhost during development
+    return process.env.NODE_ENV === 'development' && 
+           (req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1');
+  }
 });
 app.use('/api/', limiter);
 
