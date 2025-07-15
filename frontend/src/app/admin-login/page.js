@@ -15,7 +15,7 @@ export default function AdminLoginPage() {
     e.preventDefault();
     try {
       const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
-        name,
+        email: name,  // Для админа отправляем 'admin' в поле email
         password
       });
       const token = res.data.token;

@@ -78,4 +78,15 @@ backups/
 
 # Temporary files
 tmp/
-temp/ 
+temp/
+
+# Test files
+check-*.js
+analyze-*.js
+
+# Upload test files
+backend/uploads/turnover/*.xlsx
+backend/uploads/turnover/*.pdf
+
+# Temporary import files (keep scripts but ignore data)
+scripts/employees.json 
